@@ -41,7 +41,7 @@ public class Main {
         System.out.print("请输入密码：");
         String password = scan.nextLine();
         String loginRequest = """
-          /login&data={"type":"%s","username":"%s","password":"%s"}""";
+          /login?data={"type":"%s","username":"%s","password":"%s"}""";
         if (method.equals("1")) {
           out.writeUTF(String.format(loginRequest, "login", username, password));
           InputStream inFromServer = client.getInputStream();
