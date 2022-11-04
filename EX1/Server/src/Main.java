@@ -94,7 +94,9 @@ class Server extends Thread {
           }
           client.close();
         }
-        case "/record" -> {//请求格式：/record?data={"type":"GET"}或/record?data={"type":"PUT",record:[]}
+        case "/record" -> {
+          //请求格式：/record?data={"type":"GET"}返回:[{"questions":[题目,...],"correctAnswers":["A","B","C","B","A"],"userAnswers":["A","B","C","B","A"]},{...}]
+          // 或/record?data={"type":"PUT","record":{"questionIDs":[1,2,3,4,5],"userAnswers":["A","B","C","B","A"]}}
           //TODO 记录成绩
         }
         default -> {
