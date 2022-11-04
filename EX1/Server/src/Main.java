@@ -18,10 +18,11 @@ class Server extends Thread {
     public String password;
   }
 
-  private class Record {
+  private class PutRecord {
     public class userRecord {
-      ArrayList<Integer> questionIDs;
-      ArrayList<String> userAnswers;
+      int[] questionIDs;
+      String[] userAnswers;
+      String[] correctAnswers;
     }
 
     public userRecord userRecord;
@@ -119,8 +120,7 @@ class Server extends Thread {
         }
         case "/record" -> {
           //请求格式：/record?type=GET&data={"token":"tokenxxx"}返回:{"questions":[题目,...],"records":[{"correctAnswers":["A","B","C","B","A"],"userAnswers":["A","B","C","B","A"]},{...}]}
-          // 或/record?type=PUT&data={"userRecord":{"questionIDs":[1,2,3,4,5],"userAnswers":["A","B","C","B","A"]},"token":"tokenxxx"}
-          //TODO 记录成绩
+          // 或/record?type=PUT&data={"userRecord":{"questionIDs":[1,2,3,4,5],"correctAnswers":["A","B","C","B","A"],"userAnswers":["A","B","C","B","A"]},"token":"tokenxxx"}
           Gson gson = new Gson();
           DataOutputStream out = new DataOutputStream(client.getOutputStream());
           if (request.startsWith("/record?type=GET")) {
@@ -147,8 +147,18 @@ class Server extends Thread {
               out.writeUTF("403 Forbidden");
             }
           } else if (request.startsWith("/record?type=PUT")) {
-            Record record = gson.fromJson(request.replaceFirst("/record\\?type=PUT&data=", ""), Record.class);
-
+            PutRecord putRecord = gson.fromJson(request.replaceFirst("/record\\?type=PUT&data=", ""), PutRecord.class);
+            ResultSet rs = stmt.executeQuery("select username from users where token='" + putRecord.token + "'");
+            if (rs.next()) {
+              String questionIDs= Arrays.toString(putRecord.userRecord.questionIDs).replace(" ","").replace("[","").replace("]","");
+              String userAnswers= Arrays.toString(putRecord.userRecord.userAnswers).replace(" ","").replace("[","").replace("]","");
+              String correctAnswers= Arrays.toString(putRecord.userRecord.correctAnswers).replace(" ","").replace("[","").replace("]","");
+              //System.out.println("insert into record (username, questionID, userAnswer, correctAnswer) values ('"+rs.getString("username")+"','"+ questionIDs+"','"+userAnswers+"','"+correctAnswers+"')");
+              stmt.executeUpdate("insert into record (username, questionID, userAnswer, correctAnswer) values ('"+rs.getString("username")+"','"+ questionIDs+"','"+userAnswers+"','"+correctAnswers+"')");
+              out.writeUTF("200 OK");
+            } else {
+              out.writeUTF("403 Forbidden");
+            }
           } else {
             out.writeUTF("400 Bad Request");
           }
