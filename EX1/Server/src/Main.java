@@ -36,9 +36,17 @@ class Server extends Thread {
       int[] questionIDs;
       String[] correctAnswers;
       String[] userAnswers;
+      public recordData(int[] questionIDs,String[] userAnswers,String[] correctAnswers){
+        this.questionIDs=questionIDs;
+        this.userAnswers=userAnswers;
+        this.correctAnswers=correctAnswers;
+      }
     }
 
-    public recordData recordData = new recordData();
+    public ArrayList<recordData> recordData = new ArrayList<>();
+    public void AddData(int[] questionIDs,String[] userAnswers,String[] correctAnswers){
+      this.recordData.add(new recordData(questionIDs,userAnswers,correctAnswers));
+    }
   }
 
   public Server(Socket client, Statement stmt) {
@@ -119,13 +127,13 @@ class Server extends Thread {
           client.close();
         }
         case "/record" -> {
-          //请求格式：/record?type=GET&data={"token":"tokenxxx"}返回:{"questions":[题目,...],"records":[{"correctAnswers":["A","B","C","B","A"],"userAnswers":["A","B","C","B","A"]},{...}]}
+          //请求格式：/record?type=GET&data={"token":"tokenxxx"}返回:{"questions":[题目,...],"recordData":[{"correctAnswers":["A","B","C","B","A"],"userAnswers":["A","B","C","B","A"]},{...}]}
           // 或/record?type=PUT&data={"userRecord":{"questionIDs":[1,2,3,4,5],"correctAnswers":["A","B","C","B","A"],"userAnswers":["A","B","C","B","A"]},"token":"tokenxxx"}
           Gson gson = new Gson();
           DataOutputStream out = new DataOutputStream(client.getOutputStream());
           if (request.startsWith("/record?type=GET")) {
             String token = request.replace("/record?type=GET&data={\"token\":\"", "").replace("\"}", "");
-            System.out.println(token);
+            //System.out.println(token);
             ResultSet rs = stmt.executeQuery("select username from users where token='" + token + "'");
             if (rs.next()) {
               String username = rs.getString("username");
@@ -134,13 +142,15 @@ class Server extends Thread {
               while (rs.next()) {
                 response.questions.add(rs.getString("question"));
               }
-              System.out.println(response.questions);
+              //System.out.println(response.questions);
               rs = stmt.executeQuery("select * from record where username='" + username + "'");
+              int i=0;
               while (rs.next()) {
-                String[] qustionIDs = rs.getString("questionID").split(",");
-                response.recordData.questionIDs = Arrays.stream(qustionIDs).mapToInt(Integer::parseInt).toArray();
-                response.recordData.userAnswers = rs.getString("userAnswer").split(",");
-                response.recordData.correctAnswers = rs.getString("correctAnswer").split(",");
+                String[] questionIDs = rs.getString("questionID").split(",");
+                int[] questionIDs_INT = Arrays.stream(questionIDs).mapToInt(Integer::parseInt).toArray();
+                String[] userAnswers = rs.getString("userAnswer").split(",");
+                String[] correctAnswers = rs.getString("correctAnswer").split(",");
+                response.AddData(questionIDs_INT,userAnswers,correctAnswers);
               }
               out.writeUTF(gson.toJson(response));
             } else {
