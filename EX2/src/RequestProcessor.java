@@ -42,15 +42,18 @@ public class RequestProcessor implements Runnable {
       Reader in = new InputStreamReader(
         new BufferedInputStream(
           connection.getInputStream()
-        ),"US-ASCII"
+        ), "US-ASCII"
       );
       StringBuilder requestLine = new StringBuilder();
+      int flag = 0;
       while (true) {
         int c = in.read();
-        if (c == '\r' || c == '\n') break;
         requestLine.append((char) c);
+        if (c == 10 || c == 13) {
+          flag++;
+          if (flag == 4) break;
+        } else flag = 0;
       }
-
       String get = requestLine.toString();
 
       logger.info(connection.getRemoteSocketAddress() + " " + get);
@@ -97,7 +100,45 @@ public class RequestProcessor implements Runnable {
           out.write(body);
           out.flush();
         }
+      } else if (method.equals("POST")) {
+        String apiName = tokens[1];
+        version = tokens[2];
+        if (apiName.equals("/wordRepeater")) {
+          //System.out.println(tokens[tokens.length - 1].replace("word=", ""));
+          StringBuilder word=new StringBuilder();
+          int length=0;
+          for (int i = 0; i < tokens.length; i++) {
+            if (tokens[i].equals("Content-Length:")) {
+              length = Integer.parseInt(tokens[i + 1]);
+            }
+          }
+          for (int i=0;i<length;i++){
+            int c = in.read();
+            word.append((char) c);
+          }
+          String body = "{\"word\":\"" + word.toString().replace("word=", "") + "\"}";
+          if (version.startsWith("HTTP/")) { // send a MIME header
+            sendHeader(out, "HTTP/1.0 200 OK",
+              "application/json; charset=utf-8", body.length());
+          }
+          out.write(body);
+          out.flush();
+        } else {
+          String body = new StringBuilder("<HTML>\r\n")
+            .append("<HEAD><TITLE>File Not Found</TITLE>\r\n")
+            .append("</HEAD>\r\n")
+            .append("<BODY>")
+            .append("<H1>HTTP Error 404: File Not Found</H1>\r\n")
+            .append("</BODY></HTML>\r\n").toString();
+          if (version.startsWith("HTTP/")) { // send a MIME header
+            sendHeader(out, "HTTP/1.0 404 File Not Found",
+              "text/html; charset=utf-8", body.length());
+          }
+          out.write(body);
+          out.flush();
+        }
       } else { // method does not equal "GET"
+        version=tokens[2];
         String body = new StringBuilder("<HTML>\r\n")
           .append("<HEAD><TITLE>Not Implemented</TITLE>\r\n")
           .append("</HEAD>\r\n")
@@ -117,8 +158,8 @@ public class RequestProcessor implements Runnable {
     } finally {
       try {
         connection.close();
+      } catch (IOException ex) {
       }
-      catch (IOException ex) {}
     }
   }
 

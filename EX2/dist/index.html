@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="">
+
+<head>
+  <meta charset="utf-8">
+  <title>测试站</title>
+  <style type="text/css">
+    * {
+      margin: 0;
+      padding: 0;
+  
+    }
+  
+    body {
+      background-image: url('/background.jpg');
+      background-size: cover;
+      color: white;
+    }
+  
+    header {
+      height: 100px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 50px;
+    }
+  
+    main {
+      width: 100%;
+      height: 600px;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      flex-direction: column;
+    }
+  
+    .option {
+      width: 200px;
+      height: 70px;
+      border: 3px solid #ccc;
+      border-radius: 4px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      user-select: none;
+      font-size: 21px;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    欢迎来到测试站点！
+  </header>
+  <main>
+    <div id="demo" class="option">
+      静态文件获取测试
+    </div>
+    <div id="post" class="option" style="color:rgb(150, 220, 20)">
+      POST测试
+    </div>
+  </main>
+  <footer></footer>
+  <script>
+    document.getElementById("demo").addEventListener("click", function () {
+      location.href = "/demo/index.html"
+    })
+    document.getElementById("post").addEventListener("click", function () {
+      let word = prompt("请输入字符串：")
+      fetch("./wordRepeater", { method: "POST", body: "word=" + word }).then(response => response.json()).then(data => {
+        console.log(data)
+        alert("服务器收到了POST请求，发送的字符串是：" + data.word)
+      })
+    })
+  </script>
+</body>
+
+</html>
