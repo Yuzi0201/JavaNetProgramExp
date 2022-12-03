@@ -1,4 +1,5 @@
 import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
 
 import java.io.*;
 import java.net.*;
@@ -9,7 +10,8 @@ import java.util.Random;
 
 class Server extends Thread {
   String request;
-  Socket client;
+  DatagramSocket socket = null;
+  DatagramPacket packet = null;
   Statement stmt;
 
   private class LoginData {
@@ -36,28 +38,34 @@ class Server extends Thread {
       int[] questionIDs;
       String[] correctAnswers;
       String[] userAnswers;
-      public recordData(int[] questionIDs,String[] userAnswers,String[] correctAnswers){
-        this.questionIDs=questionIDs;
-        this.userAnswers=userAnswers;
-        this.correctAnswers=correctAnswers;
+
+      public recordData(int[] questionIDs, String[] userAnswers, String[] correctAnswers) {
+        this.questionIDs = questionIDs;
+        this.userAnswers = userAnswers;
+        this.correctAnswers = correctAnswers;
       }
     }
 
     public ArrayList<recordData> recordData = new ArrayList<>();
-    public void AddData(int[] questionIDs,String[] userAnswers,String[] correctAnswers){
-      this.recordData.add(new recordData(questionIDs,userAnswers,correctAnswers));
+
+    public void AddData(int[] questionIDs, String[] userAnswers, String[] correctAnswers) {
+      this.recordData.add(new recordData(questionIDs, userAnswers, correctAnswers));
     }
   }
 
-  public Server(Socket client, Statement stmt) {
-    this.client = client;
+  public Server(DatagramSocket socket, DatagramPacket packet, Statement stmt) {
+    this.socket = socket;
+    this.packet = packet;
     this.stmt = stmt;
   }
 
   @Override
   public void run() {
     try {
-      request = new DataInputStream(client.getInputStream()).readUTF();
+      //request = new DataInputStream(client.getInputStream()).readUTF();
+      byte[] data = packet.getData();
+      request = new String(data, 0, packet.getLength());
+//      System.out.println(request);
       String requestType = "";
       if (request.equals("/getQuestion")) {
         requestType = request;
@@ -81,18 +89,17 @@ class Server extends Thread {
             // 输出数据
             String Json = "{\"id\":" + id + ",\"question\":\"" + question + "\",\"A\":\"" + A + "\",\"B\":\"" + B + "\",\"C\":\"" + C + "\",\"answer\":\"" + answer + "\"}";
             //System.out.println(Json);
-            DataOutputStream out = new DataOutputStream(client.getOutputStream());
-            out.writeUTF(Json);
-            client.close();
+            //DataOutputStream out = new DataOutputStream(client.getOutputStream());
+            //out.writeUTF(Json);
+            SendBack(Json);
           }
         }
         case "/login" -> {//请求格式：/login?data={"type":"login或register","username":"xxx","password":"xxx"}
           Gson gson = new Gson();
           LoginData loginData = gson.fromJson(request.replaceFirst("/login\\?data=", ""), LoginData.class);
           ResultSet rs = stmt.executeQuery("select * from users where username='" + loginData.username + "' and password='" + loginData.password + "'");
-          DataOutputStream out = new DataOutputStream(client.getOutputStream());
           if (loginData.type == null) {
-            out.writeUTF("400 Bad Request");
+            SendBack("400 Bad Request");
             break;
           }
           switch (loginData.type) {
@@ -107,30 +114,28 @@ class Server extends Thread {
                 }
                 String token = stringBuffer.toString();
                 stmt.executeUpdate("update users set token='" + token + "' where username='" + loginData.username + "'");
-                out.writeUTF("200 OK,Token:" + token);
+                SendBack("200 OK,Token:" + token);
               } else {
-                out.writeUTF("403 Forbidden");
+                SendBack("403 Forbidden");
               }
             }
             case "register" -> {
               if (rs.next()) {
-                out.writeUTF("403 Forbidden");
+                SendBack("403 Forbidden");
               } else {
                 stmt.executeUpdate("insert into users (username, password) values ('" + loginData.username + "','" + loginData.password + "')");
-                out.writeUTF("200 OK");
+                SendBack("200 OK");
               }
             }
             case default -> {
-              out.writeUTF("400 Bad Request");
+              SendBack("400 Bad Request");
             }
           }
-          client.close();
         }
         case "/record" -> {
           //请求格式：/record?type=GET&data={"token":"tokenxxx"}返回:{"questions":[题目,...],"recordData":[{"correctAnswers":["A","B","C","B","A"],"userAnswers":["A","B","C","B","A"]},{...}]}
           // 或/record?type=PUT&data={"userRecord":{"questionIDs":[1,2,3,4,5],"correctAnswers":["A","B","C","B","A"],"userAnswers":["A","B","C","B","A"]},"token":"tokenxxx"}
           Gson gson = new Gson();
-          DataOutputStream out = new DataOutputStream(client.getOutputStream());
           if (request.startsWith("/record?type=GET")) {
             String token = request.replace("/record?type=GET&data={\"token\":\"", "").replace("\"}", "");
             //System.out.println(token);
@@ -152,9 +157,9 @@ class Server extends Thread {
                 String[] correctAnswers = rs.getString("correctAnswer").split(",");
                 response.AddData(questionIDs_INT,userAnswers,correctAnswers);
               }
-              out.writeUTF(gson.toJson(response));
+              SendBack(gson.toJson(response));
             } else {
-              out.writeUTF("403 Forbidden");
+              SendBack("403 Forbidden");
             }
           } else if (request.startsWith("/record?type=PUT")) {
             PutRecord putRecord = gson.fromJson(request.replaceFirst("/record\\?type=PUT&data=", ""), PutRecord.class);
@@ -165,30 +170,42 @@ class Server extends Thread {
               String correctAnswers= Arrays.toString(putRecord.userRecord.correctAnswers).replace(" ","").replace("[","").replace("]","");
               //System.out.println("insert into record (username, questionID, userAnswer, correctAnswer) values ('"+rs.getString("username")+"','"+ questionIDs+"','"+userAnswers+"','"+correctAnswers+"')");
               stmt.executeUpdate("insert into record (username, questionID, userAnswer, correctAnswer) values ('"+rs.getString("username")+"','"+ questionIDs+"','"+userAnswers+"','"+correctAnswers+"')");
-              out.writeUTF("200 OK");
+              SendBack("200 OK");
             } else {
-              out.writeUTF("403 Forbidden");
+              SendBack("403 Forbidden");
             }
           } else {
-            out.writeUTF("400 Bad Request");
+            SendBack("400 Bad Request");
           }
         }
         default -> {
-          new DataOutputStream(client.getOutputStream()).writeUTF("400 Bad Request");
-          client.close();
+          //new DataOutputStream(client.getOutputStream()).writeUTF("400 Bad Request");
+          SendBack("400 Bad Request");
         }
       }
     } catch (SQLException | IOException e) {
       try {
-        new DataOutputStream(client.getOutputStream()).writeUTF("500 Server Error");
+        SendBack("500 Server Error");
+      } catch (IOException ex) {
+        throw new RuntimeException(ex);
+      }
+      throw new RuntimeException(e);
+    } catch (JsonSyntaxException e){
+      try {
+        SendBack("400 Bad Request");
       } catch (IOException ex) {
         throw new RuntimeException(ex);
       }
       throw new RuntimeException(e);
     }
   }
-}
 
+  void SendBack(String msg) throws IOException {
+    byte[] backbuf = msg.getBytes();
+    DatagramPacket sendPacket = new DatagramPacket(backbuf, backbuf.length,packet.getAddress(),packet.getPort()); //封装返回给客户端的数据
+    socket.send(sendPacket);  //通过套接字反馈服务器数据
+  }
+}
 public class Main {
   static final String JDBC_DRIVER = "com.mysql.cj.jdbc.Driver";
   static final String DB_URL = "jdbc:mysql://localhost:3306/HONGDB?useSSL=false&allowPublicKeyRetrieval=true";
@@ -199,12 +216,18 @@ public class Main {
     Class.forName(JDBC_DRIVER);
     Connection conn = DriverManager.getConnection(DB_URL, USER, PASS);
     Statement stmt = conn.createStatement();
-    ServerSocket socket = new ServerSocket(11451);
-    Socket client = null;
-    while (true) {
-      client = socket.accept();
-      Server server = new Server(client, stmt);
-      server.start();
+    //ServerSocket socket = new ServerSocket(11451);
+    try(DatagramSocket socket=new DatagramSocket(11451)) {
+      //Socket client = null;
+      while (true) {
+        DatagramPacket packet=new DatagramPacket(new byte[1024], 1024);
+        //client = socket.accept();
+        socket.receive(packet);
+        Server server = new Server(socket,packet, stmt);
+        server.start();
+      }
+    }catch (IOException e){
+      e.printStackTrace();
     }
   }
 }
