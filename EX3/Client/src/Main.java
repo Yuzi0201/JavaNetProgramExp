@@ -2,6 +2,7 @@ import com.google.gson.Gson;
 
 import java.net.*;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Scanner;
 
@@ -37,13 +38,13 @@ public class Main {
   public static void main(String[] args) throws IOException {
     String serverName = "localhost";
     int port = 11451;
-    Socket client = null;
+//    Socket client = null;
     String token = "";
-    try {
+    try (DatagramSocket socket = new DatagramSocket()){
       System.out.println("欢迎来到党史答题系统！");
       System.out.println("连接主机：" + serverName + " ，端口号：" + port);
-      client = new Socket(serverName, port);
-      System.out.println("连接成功！远程主机地址：" + client.getRemoteSocketAddress() + "\n");
+//      client = new Socket(serverName, port);
+//      System.out.println("连接成功！远程主机地址：" + client.getRemoteSocketAddress() + "\n");
       while (true) {
         System.out.println("请选择操作：1.登录；2.注册");
         String method = "";
@@ -53,41 +54,54 @@ public class Main {
           System.out.println("请输入1或2 ！！");
           method = scan.nextLine();
         }
-        OutputStream outToServer = client.getOutputStream();
-        DataOutputStream out = new DataOutputStream(outToServer);
-
+//        OutputStream outToServer = client.getOutputStream();
+//        DataOutputStream out = new DataOutputStream(outToServer);
         System.out.print("请输入账号：");
         String username = scan.nextLine();
         System.out.print("请输入密码：");
         String password = scan.nextLine();
         String loginRequest = """
                 /login?data={"type":"%s","username":"%s","password":"%s"}""";
+//        DatagramSocket socket = new DatagramSocket();
         if (method.equals("1")) {
-          out.writeUTF(String.format(loginRequest, "login", username, password));
-          InputStream inFromServer = client.getInputStream();
-          DataInputStream in = new DataInputStream(inFromServer);
-          String response = in.readUTF();
-          if (response.startsWith("200")) {
+          String requestStr = String.format(loginRequest, "login", username, password);
+//          out.writeUTF(String.format(loginRequest, "login", username, password));
+//          InputStream inFromServer = client.getInputStream();
+//          DataInputStream in = new DataInputStream(inFromServer);
+//          String response = in.readUTF();
+          DatagramPacket request = new DatagramPacket(requestStr.getBytes(), requestStr.getBytes().length, InetAddress.getByName(serverName), port);
+          DatagramPacket response = new DatagramPacket(new byte[1024], 1024);
+          socket.send(request);
+          socket.receive(response);
+          String result = new String(response.getData(), 0, response.getLength(), StandardCharsets.UTF_8);
+//          System.out.println(result);
+          if (result.startsWith("200")) {
             System.out.println("登录成功！欢迎" + username);
-            token = response.replaceFirst("200 OK,Token:", "");
+            token = result.replaceFirst("200 OK,Token:", "");
             break;
           } else {
             System.out.println("登录失败！请检查账号密码！");
-            client.close();
-            client = new Socket(serverName, port);
+//            client.close();
+//            client = new Socket(serverName, port);
           }
         } else if (method.equals("2")) {
-          out.writeUTF(String.format(loginRequest, "register", username, password));
-          InputStream inFromServer = client.getInputStream();
-          DataInputStream in = new DataInputStream(inFromServer);
-          String response = in.readUTF();
-          if (response.startsWith("200")) {
+          String requestStr = String.format(loginRequest, "register", username, password);
+//          out.writeUTF(String.format(loginRequest, "register", username, password));
+//          InputStream inFromServer = client.getInputStream();
+//          DataInputStream in = new DataInputStream(inFromServer);
+//          String response = in.readUTF();
+          DatagramPacket request = new DatagramPacket(requestStr.getBytes(), requestStr.getBytes().length, InetAddress.getByName(serverName), port);
+          DatagramPacket response = new DatagramPacket(new byte[1024], 1024);
+          socket.send(request);
+          socket.receive(response);
+          String result = new String(response.getData(), 0, response.getLength(), StandardCharsets.UTF_8);
+          if (result.startsWith("200")) {
             System.out.println("注册成功！");
           } else {
             System.out.println("注册失败！可能是该用户名已被使用！");
           }
-          client.close();
-          client = new Socket(serverName, port);
+//          client.close();
+//          client = new Socket(serverName, port);
         }
       }
       while (true){
@@ -102,14 +116,21 @@ public class Main {
         if (method.equals("1")){
           String getRecordStr = """
           /record?type=GET&data={"token":"%s"}""";
-          client = new Socket(serverName, port);
-          DataOutputStream out = new DataOutputStream(client.getOutputStream());
-          out.writeUTF(String.format(getRecordStr, token));
-          InputStream inFromServer = client.getInputStream();
-          DataInputStream in = new DataInputStream(inFromServer);
-          String response = in.readUTF();
+//          client = new Socket(serverName, port);
+//          DataOutputStream out = new DataOutputStream(client.getOutputStream());
+//          out.writeUTF(String.format(getRecordStr, token));
+//          InputStream inFromServer = client.getInputStream();
+//          DataInputStream in = new DataInputStream(inFromServer);
+//          String response = in.readUTF();
+          String requestStr = String.format(getRecordStr, token);
+//          DatagramSocket socket = new DatagramSocket();
+          DatagramPacket request = new DatagramPacket(requestStr.getBytes(), requestStr.getBytes().length, InetAddress.getByName(serverName), port);
+          DatagramPacket response = new DatagramPacket(new byte[1024], 1024);
+          socket.send(request);
+          socket.receive(response);
+          String result = new String(response.getData(), 0, response.getLength());
           Gson gson = new Gson();
-          Record record = gson.fromJson(response, Record.class);
+          Record record = gson.fromJson(result, Record.class);
           System.out.println(record);
         } else if (method.equals("2")) {
           System.out.println("开始答题！\n");
@@ -119,13 +140,20 @@ public class Main {
           int correct=0;
           Gson gson = new Gson();
           for (int i = 0; i < 5; i++) {
-            client = new Socket(serverName, port);
-            DataOutputStream out = new DataOutputStream(client.getOutputStream());
-            out.writeUTF("/getQuestion");
-            InputStream inFromServer = client.getInputStream();
-            DataInputStream in = new DataInputStream(inFromServer);
-            String response = in.readUTF();
-            Question question = gson.fromJson(response, Question.class);
+//            client = new Socket(serverName, port);
+//            DataOutputStream out = new DataOutputStream(client.getOutputStream());
+//            out.writeUTF("/getQuestion");
+//            InputStream inFromServer = client.getInputStream();
+//            DataInputStream in = new DataInputStream(inFromServer);
+//            String response = in.readUTF();
+            String requestStr = "/getQuestion";
+//            DatagramSocket socket = new DatagramSocket();
+            DatagramPacket request = new DatagramPacket(requestStr.getBytes(), requestStr.getBytes().length, InetAddress.getByName(serverName), port);
+            DatagramPacket response = new DatagramPacket(new byte[1024], 1024);
+            socket.send(request);
+            socket.receive(response);
+            String result = new String(response.getData(), 0, response.getLength());
+            Question question = gson.fromJson(result, Question.class);
             System.out.print("问题：" + question.question + "\nA:" + question.A + "\nB:" + question.B + "\nC:" + question.C + "\n请作答：");
             String userAnswer = scan.nextLine();
             while (!(userAnswer.equals("A") || userAnswer.equals("B") || userAnswer.equals("C"))) {
@@ -148,23 +176,28 @@ public class Main {
           String userRecordStr = Arrays.toString(userRecord).replace(" ", "").replace("A", "\"A\"").replace("B", "\"B\"").replace("C", "\"C\"");
           String pushRecordStr = """
           /record?type=PUT&data={"userRecord":{"questionIDs":%s,"correctAnswers":%s,"userAnswers":%s},"token":"%s"}""";
-          client = new Socket(serverName, port);
-          DataOutputStream out = new DataOutputStream(client.getOutputStream());
-          out.writeUTF(String.format(pushRecordStr, questionIDStr, answerRecordStr, userRecordStr, token));
-          InputStream inFromServer = client.getInputStream();
-          DataInputStream in = new DataInputStream(inFromServer);
-          String response = in.readUTF();
+//          client = new Socket(serverName, port);
+//          DataOutputStream out = new DataOutputStream(client.getOutputStream());
+//          out.writeUTF(String.format(pushRecordStr, questionIDStr, answerRecordStr, userRecordStr, token));
+//          InputStream inFromServer = client.getInputStream();
+//          DataInputStream in = new DataInputStream(inFromServer);
+//          String response = in.readUTF();
+          String requestStr = String.format(pushRecordStr, questionIDStr, answerRecordStr, userRecordStr, token);
+//          DatagramSocket socket = new DatagramSocket();
+          DatagramPacket request = new DatagramPacket(requestStr.getBytes(), requestStr.getBytes().length, InetAddress.getByName(serverName), port);
+          DatagramPacket response = new DatagramPacket(new byte[1024], 1024);
+          socket.send(request);
+          socket.receive(response);
+//          String result = new String(response.getData(), 0, response.getLength());
         } else {
           System.exit(0);
         }
       }
     } catch (ConnectException e) {
       System.out.println("连接服务器失败！请确认服务器端状态！");
+      e.printStackTrace();
     } catch (IOException e) {
       e.printStackTrace();
-    } finally {
-      assert client != null;
-      client.close();
     }
   }
 }
